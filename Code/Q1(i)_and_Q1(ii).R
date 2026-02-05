@@ -268,7 +268,7 @@ while (flag){
     if (length(Q_1) == 0) {
       t_1 <- Inf  
     } else {
-      Y = -(1/mu_1) * log(runif(1)) # generate an exp(mu) RV - question here is do we always use runif(1)? 
+      Y = -(1/mu_1) * log(runif(1)) # generate an exp(mu) RV 
       t_1 = t + Y # set time of departure from mechanic 1
     }
     
@@ -302,7 +302,7 @@ while (flag){
     if (length(Q_2) == 0) {
       t_2 <- Inf  
     } else {
-      Y = -(1/mu_2) * log(runif(1)) # generate an exp(mu) RV - question here is do we always use runif(1)? 
+      Y = -(1/mu_2) * log(runif(1)) # generate an exp(mu) RV
       t_2 = t + Y # set time of departure from mechanic 2
     }
     

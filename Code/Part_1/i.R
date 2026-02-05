@@ -3,9 +3,9 @@
 N <- 20      # Total scooters
 n <- 10      # Working scooters
 c <- 2       # Days between checkups
-mu <- 0.25   # Breakdown rate per day
-mu1 <- 1.5   # Checkup rate per day
-mu2 <- 2     # Repair rate per day
+μ <- 0.25   # Breakdown rate per day
+μ1 <- 1.5   # Checkup rate per day
+μ2 <- 2     # Repair rate per day
 
 # Single simulation run
 simulate_T <- function() {
@@ -34,7 +34,7 @@ simulate_T <- function() {
   # Initialize events for working scooters
   for (i in 1:n) {
     # Schedule breakdown
-    breakdown_time <- time + rexp(1, mu)
+    breakdown_time <- time + rexp(1, μ)
     events <- rbind(events, data.frame(time = breakdown_time, type = 1, scooter_id = i))
   }
   
@@ -70,7 +70,7 @@ simulate_T <- function() {
       }
       
       # Schedule repair completion
-      repair_time <- time + rexp(1, mu2)
+      repair_time <- time + rexp(1, μ2)
       events <- rbind(events, data.frame(time = repair_time, type = 4, scooter_id = scooter_id))
       
       # Replace with scooter from parking lot
@@ -87,7 +87,7 @@ simulate_T <- function() {
         ))
         
         # Schedule breakdown for new scooter
-        breakdown_time <- time + rexp(1, mu)
+        breakdown_time <- time + rexp(1, μ)
         events <- rbind(events, data.frame(time = breakdown_time, type = 1, scooter_id = new_id))
         
         # Schedule checkup for new scooter
@@ -100,7 +100,7 @@ simulate_T <- function() {
       at_mechanic1 <- at_mechanic1 + 1
       
       # Schedule checkup completion
-      checkup_time <- time + rexp(1, mu1)
+      checkup_time <- time + rexp(1, μ1)
       events <- rbind(events, data.frame(time = checkup_time, type = 3, scooter_id = scooter_id))
       
       # Replace with scooter from parking lot
@@ -117,7 +117,7 @@ simulate_T <- function() {
         ))
         
         # Schedule breakdown for new scooter
-        breakdown_time <- time + rexp(1, mu)
+        breakdown_time <- time + rexp(1, μ)
         events <- rbind(events, data.frame(time = breakdown_time, type = 1, scooter_id = new_id))
         
         # Schedule checkup for new scooter

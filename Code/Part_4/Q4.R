@@ -1,321 +1,455 @@
-rm(list = ls())
+# ============================================================================
+# MCMC for Traveling Salesman Problem - Maximizing Rewards
+# Based on provided code structure
+# ============================================================================
 
+set.seed(1)
 
-#this code was inspired by the knapsack problem code in seminar 9 ex3
+# ==========
+# Question 4 (i)
+# ==========
 
-#parameters 
-N <- 10000 #Number of MCMC steps
-L <- 1000 #last L steps to analyze 
-beta <- 0.1 #temperature parameter tunable (We ll use 0.01 0.1 1)
+# ==========
+# Step 1: Define the fixed variables and generate the reward matrix
+# ==========
 
+N = 10000    # number of steps we run the MC for
+L = 1000     # last iterations used for analysis (after convergence)
+r = 100       # Number of cities to visit (excluding city 0)
 
-n_cities <- 11 #cities 0 to 10
+# Three beta values showing DIFFERENT behaviors:
+# beta = 0.01: Very low - almost uniform distribution (random exploration)
+# beta = 0.1:  Moderate - balanced exploration/exploitation  
+# beta = 1:    High - strong preference for high rewards (exploitation)
+beta_values = c(0.1, 1, 10)
 
-generate_reward_matrix <- function(){
+# Initialize reward matrix v[i,j] of size (r+1) x (r+1)
+# Row 1 = city 0, Row i+1 = city i
+# Col 1 = city 0, Col j+1 = city j
+v <- matrix(0, nrow = r+1, ncol = r+1)
 
-  
-  # we generate a matrix Aij with the rewards
-V <- matrix(0, nrow = n_cities, ncol = n_cities)
+# Generate v(0, j) for j = 1, ..., 10
+# These are rewards for going FROM city 0 TO city j
+for (j in 1:r) {
+  v[1, j+1] <- runif(1)
+}
 
-#v(i, j ) for j!=i because v(i,i) = 0
-for (i in 3:10) {
-  for (j in 1:10) {
-    if (i != j) {  # skip v(i,i)
-      V[i + 1, j + 1] <- runif(1, 0, 1)
+# Generate v(i, j) for i = 1, ..., 10 and j ≠ i
+# These are rewards for going FROM city i TO city j
+# Generate random city positions
+x_coords <- runif(r + 1, 0, 100)
+y_coords <- runif(r + 1, 0, 100)
+
+# Calculate distances and convert to rewards
+for (i in 0:r) {
+  for (j in 0:r) {
+    if (i != j) {
+      dist_ij <- sqrt((x_coords[i+1] - x_coords[j+1])^2 + 
+                        (y_coords[i+1] - y_coords[j+1])^2)
+      v[i+1, j+1] <- 100 - dist_ij  # Shorter distance = higher reward
     }
   }
 }
+
+
+# Print part of the reward matrix
+cat("Reward Matrix v (first 6 rows/cols, row 1 = city 0):\n")
+print(round(v[1:6, 1:6], 3))
+
+# ==========
+# Step 2: Function to calculate total reward V(x)
+# ==========
+
+# V(x) = sum of v(x_{i-1}, x_i) for i = 1 to r, where x_0 = 0
+V <- function(x, v) {
+  # First term: v(0, x[1]) - reward from city 0 to first city
+  total <- v[1, x[1]+1]
   
-return(V)
-}
-
-V <-generate_reward_matrix()
-
-cat("Reward matrix v(i,j)")
-print(round(V[1:6, 1:6], 3)) ###just to see
-cat("\n")
-
-
-#Calculate reward for the helper function
-# V(x) = sum_{i=1}^r v(x_{i-1}, x_i)
-
-calculate_reward <- function(path, V){
-  
-  total <- 0
-  r <-length(path) -1
-  
-  for (i in 1:r){
-    from <-path[i] + 1
-    to <-path[i+1] + 1
-    total <- total + V[from, to]
+  # Remaining terms: v(x[i], x[i+1]) for i = 1 to r-1
+  for (i in 1:(length(x)-1)) {
+    total <- total + v[x[i]+1, x[i+1]+1]
   }
-  
   return(total)
-  
-  
-  }
-# Propose new path by swapping two cities (keeping x0 = 0 fixed)
-# we get valid permutations of the same sequence this way
-propose_swap <- function(current_path) {
-  new_path <- current_path
-  r <- length(current_path) - 1
-  
-  if (r >= 2) {
-    # Swap two random positions (excluding position 1 which is x0 = 0)
-    positions <- sample(2:(r + 1), size = 2, replace = FALSE)
-    new_path[positions[1]] <- current_path[positions[2]]
-    new_path[positions[2]] <- current_path[positions[1]]
-  }
-  
-  return(new_path)
 }
 
+# ==========
+# Step 3: MCMC Simulation for each beta value
+# ==========
 
-# Target stationary distribution: π(x) -> exp(β · V(x))
-# where β is the tunable parameter
+# Storage for results from all beta values
+all_results <- list()
+best_solutions <- list()
 
-# β controls the "temperature":
-# - β → 0 we get uniform distribution (explores everything equally)
-# - β small we get broad distribution (explores widely)
-# - β medium we get concentrated on good solutions
-# - β larg we get concentrated on best solutions (exploitation)
+# Set up plot area for histograms - save directly to PNG
+png("part_i_histograms.png", width = 1000, height = 400)
+par(mfrow = c(1, length(beta_values)))
 
-run_mcmc <- function(V, r, beta, N = 50000, burn_in = 10000) {
-  # r = number of cities to visit (not including x0)
-  # beta = tunable parameter controlling exploration vs exploitation
-  # N = total number of MCMC iterations
+for (b in 1:length(beta_values)) {
   
-  # Initialize: x0 = 0, then cities 1, 2, ..., r in random order
-  X_current <- c(0, sample(1:r, size = r, replace = FALSE))
+  beta <- beta_values[b]
+  cat("\n========================================\n")
+  cat("Running MCMC with beta =", beta, "\n")
+  cat("========================================\n")
   
-  # Storage
-  rewards <- numeric(N)
-  paths <- list()
-  acceptances <- 0
+  # Initialize with arbitrary permutation (1, 2, ..., 10)
+  X_current <- 1:r
   
+  # Vector to store reward at each iteration
+  X <- numeric(N)
+  X[1] <- V(X_current, v)
   
-  # MCMC iterations
-  for (n in 1:N) {
-    # Swap two cities 
-    X_prop <- propose_swap(X_current)
+  # Track the best solution found
+  best_reward <- X[1]
+  best_perm <- X_current
+  
+  # Run N iterations of MCMC
+  for (n in 2:N) {
     
-    # calculate the values with the helper 
-    v_current <- calculate_reward(X_current, V)
-    v_prop <- calculate_reward(X_prop, V)
+    # PROPOSAL STEP: Swap two random cities
+    Y <- X_current
     
-    # METROPOLIS ACCEPTANCE 
-    # Accept with probability min(1, exp(β·(V_prop - V_current)))
-    exp_term <- exp(beta * (v_prop - v_current))
-    prob_accept <- min(exp_term, 1)
-    
-    U <- runif(1)
-    if (U < prob_accept) {
-      X_current <- X_prop
-      acceptances <- acceptances + 1
+    # Select two distinct indices uniformly at random
+    i <- sample(1:r, 1)
+    j <- sample(1:r, 1)
+    while (j == i) {
+      j <- sample(1:r, 1)
     }
-
     
-    # Store current state
-    rewards[n] <- calculate_reward(X_current, V)
-    if (n %% 1000 == 0) {
-      paths[[n / 1000]] <- X_current
+    # Perform the swap
+    temp <- Y[i]
+    Y[i] <- Y[j]
+    Y[j] <- temp
+    
+    # Calculate rewards
+    V_current <- V(X_current, v)
+    V_prop <- V(Y, v)
+    
+    # ACCEPTANCE STEP using Metropolis-Hastings
+    # Accept probability = min(1, exp(beta * (V_prop - V_current)))
+    # Since pi(x) ∝ exp(beta * V(x)), the ratio is:
+    # pi(Y)/pi(X) = exp(beta * V(Y)) / exp(beta * V(X)) = exp(beta * (V(Y) - V(X)))
+    
+    log_alpha <- beta * (V_prop - V_current)
+    
+    if (log(runif(1)) < log_alpha) {
+      X_current <- Y  # Accept proposal
+    }
+    # Otherwise: reject and keep X_current unchanged
+    
+    # Store current reward
+    X[n] <- V(X_current, v)
+    
+    # Update best solution if improved
+    if (X[n] > best_reward) {
+      best_reward <- X[n]
+      best_perm <- X_current
     }
   }
   
-  # Return results
-  list(
-    rewards = rewards,
-    rewards_after_burnin = rewards[(burn_in + 1):N],
-    paths = paths,
-    acceptance_rate = acceptances / N,
-    best_reward = max(rewards),
-    best_path_idx = which.max(rewards)
-  )
+  # Store results
+  all_results[[b]] <- X
+  best_solutions[[b]] <- list(reward = best_reward, perm = best_perm)
+  
+  # Plot histogram of last L iterations (after convergence)
+  hist(X[(N-L+1):N], breaks = 50, col = "lightblue",
+       xlab = "Reward V(x)", ylab = "Frequency",
+       main = paste("Stationary Distribution (β =", beta, ")"))
+  abline(v = mean(X[(N-L+1):N]), col = "red", lwd = 2)
+  
+  # Print summary statistics
+  cat("Mean reward (last", L, "iterations):", round(mean(X[(N-L+1):N]), 4), "\n")
+  cat("Std dev (last", L, "iterations):", round(sd(X[(N-L+1):N]), 4), "\n")
+  cat("Best reward found:", round(best_reward, 4), "\n")
+  cat("Best permutation:", best_perm, "\n")
 }
 
+# Close histogram PNG device
+dev.off()
 
-cat("============================================\n")
-cat("Running MCMC for 3 Different β Values\n")
+# ==========
+# Step 4: Additional plots to demonstrate different behaviors
+# ==========
+
+png("part_i_analysis.png", width = 800, height = 600)
+par(mfrow = c(2, 2))
+
+# Plot 1: Trace plots showing chain behavior
+plot(all_results[[1]], type = 'l', col = 'blue',
+     main = "Trace Plots of Rewards Over Iterations",
+     xlab = "Iteration", ylab = "Reward V(x)",
+     ylim = c(min(unlist(all_results)), max(unlist(all_results))))
+lines(all_results[[2]], col = 'green')
+lines(all_results[[3]], col = 'red')
+legend("bottomright", legend = paste("β =", beta_values),
+       col = c("blue", "green", "red"), lty = 1, cex = 0.8)
+
+# Plot 2: Running average to show convergence
+running_avg <- function(x, window = 100) {
+  n <- length(x)
+  avg <- numeric(n)
+  for (i in 1:n) {
+    start <- max(1, i - window + 1)
+    avg[i] <- mean(x[start:i])
+  }
+  return(avg)
+}
+
+plot(running_avg(all_results[[1]]), type = 'l', col = 'blue',
+     main = "Running Average of Rewards",
+     xlab = "Iteration", ylab = "Average Reward")
+lines(running_avg(all_results[[2]]), col = 'green')
+lines(running_avg(all_results[[3]]), col = 'red')
+legend("bottomright", legend = paste("β =", beta_values),
+       col = c("blue", "green", "red"), lty = 1, cex = 0.8)
+
+# Plot 3: Boxplot comparison
+boxplot(list(all_results[[1]][(N-L+1):N], 
+             all_results[[2]][(N-L+1):N], 
+             all_results[[3]][(N-L+1):N]),
+        names = paste("β =", beta_values),
+        main = "Boxplot of Rewards (Last 1000 iterations)",
+        ylab = "Reward V(x)",
+        col = c("lightblue", "lightgreen", "lightcoral"))
+
+# Plot 4: Overlaid histograms
+hist(all_results[[1]][(N-L+1):N], breaks = 30, col = rgb(0,0,1,0.3),
+     main = "Overlaid Distributions",
+     xlab = "Reward V(x)", xlim = c(2, 8))
+hist(all_results[[2]][(N-L+1):N], breaks = 30, col = rgb(0,1,0,0.3), add = TRUE)
+hist(all_results[[3]][(N-L+1):N], breaks = 30, col = rgb(1,0,0,0.3), add = TRUE)
+legend("topleft", legend = paste("β =", beta_values),
+       fill = c(rgb(0,0,1,0.3), rgb(0,1,0,0.3), rgb(1,0,0,0.3)), cex = 0.8)
+
+dev.off()
+
+# ==========
+# Step 5: Summary table for Part (i)
+# ==========
+
+cat("\n============================================\n")
+cat("PART (i) SUMMARY: Fixed Beta Comparison\n")
 cat("============================================\n\n")
 
-r <- 10  # visit all cities 1 through 10
-N <- 50000
-burn_in <- 10000
+summary_table <- data.frame(
+  Beta = beta_values,
+  Mean_Reward = sapply(all_results, function(x) mean(x[(N-L+1):N])),
+  Std_Dev = sapply(all_results, function(x) sd(x[(N-L+1):N])),
+  Min_Reward = sapply(all_results, function(x) min(x[(N-L+1):N])),
+  Max_Reward = sapply(all_results, function(x) max(x[(N-L+1):N])),
+  Best_Found = sapply(best_solutions, function(x) x$reward)
+)
+print(round(summary_table, 4))
 
-# THREE DIFFERENT β VALUES
-beta_values <- c(0.1, 0.5, 1)
+cat("\nBest permutations found:\n")
+for (b in 1:length(beta_values)) {
+  cat("β =", beta_values[b], ":", best_solutions[[b]]$perm, 
+      "-> Reward =", round(best_solutions[[b]]$reward, 4), "\n")
+}
 
-results <- list()
+# ============================================================================
+# Question 4 (ii): SIMULATED ANNEALING - Changing beta during simulation
+# ============================================================================
 
-for (i in 1:length(beta_values)) {
-  beta <- beta_values[i]
-  cat(sprintf("Running MCMC with β = %.1f...\n", beta))
+cat("\n============================================\n")
+cat("PART (ii): SIMULATED ANNEALING\n")
+cat("============================================\n")
+
+# The key idea: Start with LOW beta (exploration) and gradually INCREASE it (exploitation)
+# This allows the chain to explore widely at first, then settle into good solutions
+
+run_simulated_annealing <- function(v, r, N, beta_start, beta_end, schedule = "linear") {
   
-  results[[i]] <- run_mcmc(V, r, beta, N, burn_in)
+  X_current <- 1:r
+  X <- numeric(N)
+  betas_used <- numeric(N)
+  X[1] <- V(X_current, v)
   
+  best_reward <- X[1]
+  best_perm <- X_current
   
-  cat(sprintf("  Acceptance rate: %.3f\n", results[[i]]$acceptance_rate))
-  cat(sprintf("  Best reward found: %.4f\n", results[[i]]$best_reward))
-  cat(sprintf("  Mean reward (after burn-in): %.4f\n", 
-              mean(results[[i]]$rewards_after_burnin)))
-  cat(sprintf("  Std dev (after burn-in): %.4f\n\n", 
-              sd(results[[i]]$rewards_after_burnin)))
+  for (n in 2:N) {
+    # Calculate beta based on cooling schedule
+    progress <- n / N  # Goes from 0 to 1
+    
+    if (schedule == "linear") {
+      beta <- beta_start + progress * (beta_end - beta_start)
+    } else if (schedule == "exponential") {
+      beta <- beta_start * (beta_end / beta_start)^progress
+    } else if (schedule == "logarithmic") {
+      beta <- beta_start + (beta_end - beta_start) * log(1 + progress * (exp(1) - 1))
+    }
+    
+    betas_used[n] <- beta
+    
+    # Proposal: swap two random cities
+    Y <- X_current
+    i <- sample(1:r, 1)
+    j <- sample(1:r, 1)
+    while (j == i) j <- sample(1:r, 1)
+    temp <- Y[i]; Y[i] <- Y[j]; Y[j] <- temp
+    
+    # Accept/reject
+    V_current <- V(X_current, v)
+    V_prop <- V(Y, v)
+    log_alpha <- beta * (V_prop - V_current)
+    
+    if (log(runif(1)) < log_alpha) {
+      X_current <- Y
+    }
+    
+    X[n] <- V(X_current, v)
+    
+    if (X[n] > best_reward) {
+      best_reward <- X[n]
+      best_perm <- X_current
+    }
+  }
+  
+  return(list(rewards = X, betas = betas_used, 
+              best_reward = best_reward, best_perm = best_perm))
 }
 
-# Setup for multiple plots
-par(mfrow = c(3, 3), mar = c(4, 4, 3, 1))
+# Run simulated annealing with different schedules
+set.seed(42)
+sa_linear <- run_simulated_annealing(v, r, N, beta_start = 0.001, beta_end = 2, schedule = "linear")
 
-colors <- c("blue", "darkgreen", "red")
-beta_labels <- c("β = 0.1 (Exploratory)", 
-                 "β = 5 (Balanced)", 
-                 "β = 50 (Greedy)")
+set.seed(42)
+sa_exp <- run_simulated_annealing(v, r, N, beta_start = 0.001, beta_end = 2, schedule = "exponential")
 
-# ROW 1: Full trace plots
-for (i in 1:3) {
-  plot(results[[i]]$rewards, type = 'l', col = colors[i],
-       main = paste("Trace Plot:", beta_labels[i]),
-       xlab = "Iteration", ylab = "Reward V(x)",
-       ylim = range(results[[1]]$rewards, results[[2]]$rewards, results[[3]]$rewards))
-  abline(h = results[[i]]$best_reward, col = "black", lty = 2, lwd = 1.5)
-  abline(v = burn_in, col = "gray", lty = 3)
-  legend("bottomright", 
-         legend = c(paste("Best:", round(results[[i]]$best_reward, 3)),
-                    paste("Mean:", round(mean(results[[i]]$rewards_after_burnin), 3))),
-         bty = "n", cex = 0.8)
+set.seed(42)
+sa_log <- run_simulated_annealing(v, r, N, beta_start = 0.001, beta_end = 2, schedule = "logarithmic")
+
+# Print SA results
+cat("\nSimulated Annealing Results:\n")
+cat("Linear schedule:      Best =", round(sa_linear$best_reward, 4), 
+    "Perm:", sa_linear$best_perm, "\n")
+cat("Exponential schedule: Best =", round(sa_exp$best_reward, 4), 
+    "Perm:", sa_exp$best_perm, "\n")
+cat("Logarithmic schedule: Best =", round(sa_log$best_reward, 4), 
+    "Perm:", sa_log$best_perm, "\n")
+
+# Compare with fixed beta
+cat("\nComparison with fixed beta:\n")
+for (b in 1:length(beta_values)) {
+  cat("Fixed β =", beta_values[b], ": Best =", round(best_solutions[[b]]$reward, 4), "\n")
 }
 
+# ==========
+# Plots for Part (ii)
+# ==========
 
-# ROW 2: Histograms (after burn-in)
-for (i in 1:3) {
-  hist(results[[i]]$rewards_after_burnin, 
-       breaks = 50, 
-       col = colors[i],
-       border = "white",
-       main = paste("Distribution:", beta_labels[i]),
-       xlab = "Reward V(x)",
-       ylab = "Frequency",
-       xlim = range(results[[1]]$rewards_after_burnin, 
-                    results[[2]]$rewards_after_burnin, 
-                    results[[3]]$rewards_after_burnin))
-  abline(v = mean(results[[i]]$rewards_after_burnin), 
-         col = "black", lwd = 2, lty = 2)
-}
+png("part_ii_analysis.png", width = 800, height = 600)
+par(mfrow = c(2, 2))
 
+# Plot 1: Cooling schedules (how beta changes)
+plot(sa_linear$betas, type = 'l', col = 'blue',
+     main = "Cooling Schedules: Beta vs Iteration",
+     xlab = "Iteration", ylab = "Beta")
+lines(sa_exp$betas, col = 'green')
+lines(sa_log$betas, col = 'red')
+legend("topleft", legend = c("Linear", "Exponential", "Logarithmic"),
+       col = c("blue", "green", "red"), lty = 1, cex = 0.8)
 
-# ROW 3: Autocorrelation plots
-for (i in 1:3) {
-  acf(results[[i]]$rewards_after_burnin, 
-      main = paste("ACF:", beta_labels[i]),
-      col = colors[i],
-      lwd = 2,
-      lag.max = 100)
-}
+# Plot 2: SA reward traces
+plot(sa_linear$rewards, type = 'l', col = 'blue',
+     main = "Simulated Annealing: Reward Traces",
+     xlab = "Iteration", ylab = "Reward V(x)")
+lines(sa_exp$rewards, col = 'green')
+lines(sa_log$rewards, col = 'red')
+legend("bottomright", legend = c("Linear", "Exponential", "Logarithmic"),
+       col = c("blue", "green", "red"), lty = 1, cex = 0.8)
 
-
-#Comparison with all three in the same axis 
-
-par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
-
-# Combined trace (after burn-in)
-plot_start <- burn_in + 1
-plot_end <- burn_in + 5000
-plot(plot_start:plot_end, results[[1]]$rewards[plot_start:plot_end], 
-     type = 'l', col = colors[1], lwd = 1,
-     main = "Comparison: First 5000 Post-Burn-in Iterations",
-     xlab = "Iteration", ylab = "Reward V(x)",
-     ylim = range(results[[1]]$rewards[plot_start:plot_end],
-                  results[[2]]$rewards[plot_start:plot_end],
-                  results[[3]]$rewards[plot_start:plot_end]))
-lines(plot_start:plot_end, results[[2]]$rewards[plot_start:plot_end], 
-      col = colors[2], lwd = 1)
-lines(plot_start:plot_end, results[[3]]$rewards[plot_start:plot_end], 
-      col = colors[3], lwd = 1)
-legend("bottomright", legend = beta_labels, 
-       col = colors, lwd = 2, cex = 0.7)
-
-
-hist(results[[1]]$rewards_after_burnin, breaks = 50, 
-     col = rgb(0, 0, 1, 0.3), border = NA,
-     main = "Comparison: Distribution of Rewards",
-     xlab = "Reward V(x)", ylab = "Density",
-     freq = FALSE,
-     xlim = range(results[[1]]$rewards_after_burnin,
-                  results[[2]]$rewards_after_burnin,
-                  results[[3]]$rewards_after_burnin))
-hist(results[[2]]$rewards_after_burnin, breaks = 50,
-     col = rgb(0, 0.5, 0, 0.3), border = NA, add = TRUE, freq = FALSE)
-hist(results[[3]]$rewards_after_burnin, breaks = 50,
-     col = rgb(1, 0, 0, 0.3), border = NA, add = TRUE, freq = FALSE)
-legend("topleft", legend = beta_labels, 
-       fill = c(rgb(0, 0, 1, 0.5), rgb(0, 0.5, 0, 0.5), rgb(1, 0, 0, 0.5)),
-       cex = 0.7)
-
-
-
-# Box plots comparison
-boxplot(results[[1]]$rewards_after_burnin,
-        results[[2]]$rewards_after_burnin,
-        results[[3]]$rewards_after_burnin,
-        names = c("β=0.1", "β=5", "β=50"),
-        col = colors,
-        main = "Comparison: Reward Distribution",
-        ylab = "Reward V(x)",
-        notch = TRUE)
-
-# Running average comparison
-running_avg_1 <- cumsum(results[[1]]$rewards) / (1:N)
-running_avg_2 <- cumsum(results[[2]]$rewards) / (1:N)
-running_avg_3 <- cumsum(results[[3]]$rewards) / (1:N)
-
-
-
-plot(running_avg_1, type = 'l', col = colors[1], lwd = 2,
-     main = "Cumulative Average Reward",
+# Plot 3: Comparison of SA vs fixed beta (running average)
+plot(running_avg(sa_linear$rewards), type = 'l', col = 'purple', lwd = 2,
+     main = "SA vs Fixed Beta (Running Average)",
      xlab = "Iteration", ylab = "Average Reward",
-     ylim = range(running_avg_1, running_avg_2, running_avg_3))
-lines(running_avg_2, col = colors[2], lwd = 2)
-lines(running_avg_3, col = colors[3], lwd = 2)
-abline(v = burn_in, col = "gray", lty = 3)
-legend("bottomright", legend = beta_labels, 
-       col = colors, lwd = 2, cex = 0.7)
+     ylim = c(3, 8))
+lines(running_avg(all_results[[1]]), col = 'blue', lty = 2)
+lines(running_avg(all_results[[2]]), col = 'green', lty = 2)
+lines(running_avg(all_results[[3]]), col = 'red', lty = 2)
+legend("bottomright", 
+       legend = c("SA Linear", paste("Fixed β =", beta_values)),
+       col = c("purple", "blue", "green", "red"),
+       lty = c(1, 2, 2, 2), cex = 0.7)
 
+# Plot 4: Final comparison boxplot
+all_methods <- list(
+  all_results[[1]][(N-L+1):N],
+  all_results[[2]][(N-L+1):N],
+  all_results[[3]][(N-L+1):N],
+  sa_linear$rewards[(N-L+1):N],
+  sa_exp$rewards[(N-L+1):N]
+)
+boxplot(all_methods,
+        names = c(paste("β=", beta_values), "SA Lin", "SA Exp"),
+        main = "All Methods Comparison (Last 1000)",
+        ylab = "Reward", col = c("lightblue", "lightgreen", "lightcoral", "plum", "khaki"),
+        las = 2, cex.axis = 0.8)
 
+dev.off()
 
-#find and display best paths 
+# ==========
+# Multiple trials for robust comparison
+# ==========
 
+cat("\n============================================\n")
+cat("Multiple Trial Comparison (20 runs each)\n")
+cat("============================================\n")
 
-for (i in 1:3) {
-  best_idx <- results[[i]]$best_path_idx
+n_trials <- 20
+results_matrix <- matrix(0, nrow = n_trials, ncol = 6)
+colnames(results_matrix) <- c("β=0.01", "β=0.1", "β=1", "SA_Lin", "SA_Exp", "SA_Log")
+
+for (trial in 1:n_trials) {
+  # Fixed beta runs
+  for (b in 1:3) {
+    X_current <- sample(1:r)
+    best <- V(X_current, v)
+    for (n in 2:N) {
+      Y <- X_current
+      i <- sample(1:r, 1); j <- sample(1:r, 1)
+      while (j == i) j <- sample(1:r, 1)
+      temp <- Y[i]; Y[i] <- Y[j]; Y[j] <- temp
+      if (log(runif(1)) < beta_values[b] * (V(Y, v) - V(X_current, v))) X_current <- Y
+      if (V(X_current, v) > best) best <- V(X_current, v)
+    }
+    results_matrix[trial, b] <- best
+  }
   
-  # Reconstruct the best path (we need to run forward from a saved point)
-  # For simplicity, let's find the best from last 1000 iterations
-  last_1000 <- results[[i]]$rewards[(N-999):N]
-  best_in_last <- which.max(last_1000)
-  
-  cat(sprintf("β = %.1f:\n", beta_values[i]))
-  cat(sprintf("  Best reward: %.4f\n", results[[i]]$best_reward))
-  cat(sprintf("  Found at iteration: %d\n\n", best_idx))
+  # SA runs
+  results_matrix[trial, 4] <- run_simulated_annealing(v, r, N, 0.001, 2, "linear")$best_reward
+  results_matrix[trial, 5] <- run_simulated_annealing(v, r, N, 0.001, 2, "exponential")$best_reward
+  results_matrix[trial, 6] <- run_simulated_annealing(v, r, N, 0.001, 2, "logarithmic")$best_reward
 }
 
-#verify convergence 
+# Final comparison table
+final_table <- data.frame(
+  Method = colnames(results_matrix),
+  Mean_Best = colMeans(results_matrix),
+  SD_Best = apply(results_matrix, 2, sd),
+  Max_Best = apply(results_matrix, 2, max)
+)
+final_table[, 2:4] <- round(final_table[, 2:4], 4)
 
-for (i in 1:3) {
-  # Split chain in half and compare
-  n_half <- length(results[[i]]$rewards_after_burnin) / 2
-  first_half <- results[[i]]$rewards_after_burnin[1:n_half]
-  second_half <- results[[i]]$rewards_after_burnin[(n_half+1):(2*n_half)]
-  
-  cat(sprintf("β = %.1f:\n", beta_values[i]))
-  cat(sprintf("  First half mean:  %.4f\n", mean(first_half)))
-  cat(sprintf("  Second half mean: %.4f\n", mean(second_half)))
-  cat(sprintf("  Difference:       %.4f\n", abs(mean(first_half) - mean(second_half))))
-  cat(sprintf("  Effective sample size: ~%.0f\n\n", 
-              length(results[[i]]$rewards_after_burnin) / 
-                (1 + 2 * sum(acf(results[[i]]$rewards_after_burnin, 
-                                 plot = FALSE, lag.max = 50)$acf[-1]))))
-  
-  
-  
-  
+cat("\nFinal Comparison (20 trials):\n")
+print(final_table)
 
-}
+# Final bar plot
+png("final_comparison_new.png", width = 700, height = 500)
+par(mfrow = c(1, 1))
+barplot(final_table$Mean_Best, names.arg = final_table$Method,
+        main = "Mean Best Reward Across 20 Trials",
+        ylab = "Mean Best Reward",
+        col = c("lightblue", "lightgreen", "lightcoral", "plum", "khaki", "orange"),
+        las = 2, cex.names = 0.8)
+arrows(x0 = seq(0.7, by = 1.2, length.out = 6),
+       y0 = final_table$Mean_Best - final_table$SD_Best,
+       y1 = final_table$Mean_Best + final_table$SD_Best,
+       angle = 90, code = 3, length = 0.1)
+dev.off()
+
+cat("\n============================================\n")
+cat("ANALYSIS COMPLETE\n")
+cat("============================================\n")
+cat("Output files: part_i_histograms.png, part_i_analysis.png,\n")
+cat("              part_ii_analysis.png, final_comparison.png\n")
