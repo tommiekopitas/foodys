@@ -348,6 +348,7 @@ print(paste("Indeed, we see the Expected Time until Foodys is under-resourced is
             round(mean(Total_T),digits = 2), "days (with k=",k,
               "iterations)"))
 print(paste("S_sq: the current sample variance is ", round(S_sq, digits = 4)))
+print(paste("S: the current sample s.d. is ", round(sqrt(S_sq), digits = 4)))
 print(paste("The variance of the estimator is ", round(S_sq/k, digits = 4)))
 print(paste("The s.d. of the estimator is ", round(sqrt(S_sq/k), digits = 4)))
 break
