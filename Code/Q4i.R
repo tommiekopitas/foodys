@@ -17,6 +17,11 @@ set.seed(1)
 N = 10000 # number of steps we run the MC for
 L = 1000 # last iterations plotted
 r = 10 # Number of cities
+
+# We create a vector of beta values from 0 to 20
+# in steps of 1. We note that, we show steps of
+# 0.1 in the report, however, this would take
+# too long to run, thus, we input 1 instead.
 beta_values = seq(0, 20, by = 1)
 
 # initialising a matrix of zeros of size r+1 x r+1
@@ -291,7 +296,7 @@ abline(h = axTicks(2), col = "lightgray", lty = "dotted")
 # Note: as mentioned, we plot only the 1000 last values which is when our MC
 # will have converged to the stationary distribution
 for (betas in 1:length(beta_values_chosen)) {
-  hist(beta_values_chosen_list[[betas]], breaks = 50, xlab="states", ylab=
+  hist(beta_values_chosen_list[[betas]], breaks = 50, xlab="Itinerary Values", ylab=
          "Frequency", main=paste("Histogram of MC (Beta =",
           beta_values_chosen[betas],"\n and mean =",
           round(mean(beta_values_chosen_list[[betas]]),2),")"))
