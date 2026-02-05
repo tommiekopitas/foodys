@@ -170,7 +170,7 @@ echo "----------------------------------------"
 # Copy group dynamics files
 GD_LOCATIONS=(
     "."
-    "./Report"
+    "../Report/deliverables"
     "./GroupDynamics"
     "./group_dynamics"
 )
