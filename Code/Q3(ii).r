@@ -4,15 +4,20 @@
 # Based on Lecture 2 methods, code structure follows seminar 2 R codes
 #========================
 
+
+#========================
 # Clear environment and set seed for reproducibility
 rm(list = ls())
 set.seed(1)
+#========================
+
 
 #========================
 # Question 3(i): Functions to simulate service times for each mechanic
 #========================
 
 
+#========================
 # Mechanic 1: Acceptance-Rejection Method
 #
 # We use the Acceptance-Rejection method because the target density 
@@ -26,7 +31,7 @@ set.seed(1)
 #
 # The constant c is chosen as the supremum of f(x)/g(x), which we derived
 # analytically in the report as c = 2 * exp(-0.5)
-
+#========================
 
 sim_mech1_service <- function(n) {
   
@@ -68,8 +73,10 @@ sim_mech1_service <- function(n) {
   
   return(X_values)
 }
+#========================
 
 
+#========================
 # Mechanic 2: Inverse Transform Method
 #
 # We use the Inverse Transform method because the CDF F(x) = 1 - exp(-3x^2)
@@ -81,7 +88,7 @@ sim_mech1_service <- function(n) {
 #
 # Note: Since U ~ Uniform(0,1), we have (1-U) ~ Uniform(0,1) as well,
 # but we use (1-U) to match our algebraic derivation exactly.
-
+#========================
 
 sim_mech2_service <- function(n) {
   
@@ -96,6 +103,7 @@ sim_mech2_service <- function(n) {
   
   return(X_values)
 }
+#========================
 
 
 #========================
@@ -115,17 +123,22 @@ sim_mech2_service <- function(n) {
 
 N_sim <- 10000 # number of samples to generate
 
+#========================
 # Generate samples from both mechanics
+#========================
 
 samples_m1 <- sim_mech1_service(N_sim) # Mechanic 1 service times
 samples_m2 <- sim_mech2_service(N_sim) # Mechanic 2 service times
 
 #========================
-# Plot Histogram for Mechanic 1 (Acceptance-Rejection Method)
+# Set up plotting layout to display both histograms side by side
 #========================
 
-# Save plot to PNG file
-png("mechanic_1_histogram.png", width = 800, height = 600)
+par(mfrow = c(1, 2)) # 1 row, 2 columns
+
+#========================
+# Plot Histogram for Mechanic 1 (Acceptance-Rejection Method)
+#========================
 
 # First compute histogram without plotting to extract bin width
 h1 <- hist(samples_m1, breaks = 50, plot = FALSE)
@@ -135,7 +148,7 @@ bin_width1 <- h1$breaks[2] - h1$breaks[1]
 scaling_factor1 <- N_sim * bin_width1
 
 # Plot the histogram
-hist(samples_m1, breaks = 50, main = "Mechanic 1: Acceptance-Rejection Method Simulation",
+hist(samples_m1, breaks = 50, main = "Mechanic 1: Acceptance-Rejection",
      xlab = "Service Time (x)", col = "lightblue", border = "white",
      ylim = c(0, 1000)) 
 
@@ -149,12 +162,9 @@ lines(x_vals1, y_vals1, col = "red", lwd = 2)
 legend("topright", legend = c("Simulated", "Theoretical PDF"), 
        col = c("lightblue", "red"), lwd = c(NA, 2), pch = c(15, NA))
 
-dev.off() # Close PNG device
-
+#========================
 # Plot Histogram for Mechanic 2 (Inverse Transform Method)
-
-# Save plot to PNG file
-png("mechanic_2_histogram.png", width = 800, height = 600)
+#========================
 
 # First compute histogram without plotting to extract bin width
 h2 <- hist(samples_m2, breaks = 50, plot = FALSE)
@@ -164,7 +174,7 @@ bin_width2 <- h2$breaks[2] - h2$breaks[1]
 scaling_factor2 <- N_sim * bin_width2
 
 # Plot the histogram
-hist(samples_m2, breaks = 50, main = "Mechanic 2: Inverse Transform Simulation",
+hist(samples_m2, breaks = 50, main = "Mechanic 2: Inverse Transform",
      xlab = "Service Time (x)", col = "lightgreen", border = "white",
      ylim = c(0, 1000))
 
@@ -178,7 +188,9 @@ lines(x_vals2, y_vals2, col = "darkgreen", lwd = 2)
 legend("topright", legend = c("Simulated", "Theoretical PDF"), 
        col = c("lightgreen", "darkgreen"), lwd = c(NA, 2), pch = c(15, NA))
 
-dev.off() # Close PNG device
+#========================
+# Reset plotting layout to default
+#========================
 
-
-print("Plots saved to your folder.")
+par(mfrow = c(1, 1))
+#========================
