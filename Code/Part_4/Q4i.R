@@ -291,7 +291,7 @@ abline(h = axTicks(2), col = "lightgray", lty = "dotted")
 # Note: as mentioned, we plot only the 1000 last values which is when our MC
 # will have converged to the stationary distribution
 for (betas in 1:length(beta_values_chosen)) {
-  hist(beta_values_chosen_list[[betas]], breaks = 50, xlab="states", ylab=
+  hist(beta_values_chosen_list[[betas]], breaks = 50, xlab="Itinerary Values", ylab=
          "Frequency", main=paste("Histogram of MC (Beta =",
           beta_values_chosen[betas],"\n and mean =",
           round(mean(beta_values_chosen_list[[betas]]),2),")"))
