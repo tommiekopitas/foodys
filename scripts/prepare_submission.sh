@@ -10,11 +10,11 @@
 #
 # Usage: ./prepare_submission.sh
 #
-# IMPORTANT: Run this script from the root of your project directory
+# IMPORTANT: Run this script from the scripts directory
 # Expected structure:
-#   ./Code/          - Contains R scripts
-#   ./Report/        - Contains the PDF report
-#   ./group_dynamics_*.pdf - Group dynamics files (or specify path)
+#   ../Code/                       - Contains R scripts
+#   ../Report/                     - Contains the PDF report
+#   ./                             - Contains group_dynamics_*.pdf files
 #===============================================================================
 
 # Group examination numbers (sorted numerically for consistency)
@@ -40,45 +40,23 @@ echo "Step 1: Copying and renaming R scripts..."
 echo "----------------------------------------"
 
 # Define source directory for R scripts
-# Modify these paths based on your actual directory structure
+# Script is run from scripts/, so Code is at ../Code
 CODE_DIR="../Code"
 if [ ! -d "$CODE_DIR" ]; then
+    echo "  ⚠ Code directory not found at $CODE_DIR"
     CODE_DIR="."
 fi
 
-# Expected R script names (modify if your files are named differently)
-# Format: "source_name:target_name"
+# Expected R script names
 declare -a SCRIPTS=(
-    "Q1i.R:Q1i.R"
-    "Q1ii.R:Q1ii.R"
-    "Q1iii.R:Q1iii.R"
-    "Q1iv.R:Q1iv.R"
-    "Q3i.R:Q3i.R"
-    "Q3ii.R:Q3ii.R"
-    "Q4i.R:Q4i.R"
-    "Q4ii.R:Q4ii.R"
-)
-
-# Alternative naming patterns to search for
-# Add your actual file names here if different
-declare -a ALT_PATTERNS=(
-    "q1_i:Q1i"
-    "q1_ii:Q1ii"
-    "q1_iii:Q1iii"
-    "q1_iv:Q1iv"
-    "q3_i:Q3i"
-    "q3_ii:Q3ii"
-    "q4_i:Q4i"
-    "q4_ii:Q4ii"
-    "question1i:Q1i"
-    "question1ii:Q1ii"
-    "question1iii:Q1iii"
-    "question1iv:Q1iv"
-    "question2:Q2"
-    "question3i:Q3i"
-    "question3ii:Q3ii"
-    "question4i:Q4i"
-    "question4ii:Q4ii"
+    "Q1i.R"
+    "Q1ii.R"
+    "Q1iii.R"
+    "Q1iv.R"
+    "Q3i.R"
+    "Q3ii.R"
+    "Q4i.R"
+    "Q4ii.R"
 )
 
 # Function to find and copy R script
@@ -86,7 +64,7 @@ copy_r_script() {
     local target_name=$1
     local found=0
     
-    # First, try exact match
+    # First, try exact match in Code directory
     if [ -f "$CODE_DIR/$target_name" ]; then
         cp "$CODE_DIR/$target_name" "$TEMP_DIR/$target_name"
         echo "  ✓ Copied $target_name"
@@ -124,8 +102,7 @@ copy_r_script() {
 
 # Copy all R scripts
 for script in "${SCRIPTS[@]}"; do
-    target_name="${script#*:}"
-    copy_r_script "$target_name"
+    copy_r_script "$script"
 done
 
 echo ""
@@ -137,29 +114,50 @@ REPORT_FOUND=0
 REPORT_TARGET="${SUBMISSION_NAME}.pdf"
 
 # Search locations for the report
-REPORT_LOCATIONS=(
-    "./Report/*.pdf"
-    "./*.pdf"
-    "./report/*.pdf"
-    "./PDF/*.pdf"
-)
+# Script runs from scripts/, so Report folder is at ../Report
+REPORT_DIR="../Report"
 
-for pattern in "${REPORT_LOCATIONS[@]}"; do
-    for report in $pattern; do
-        if [ -f "$report" ]; then
-            # Skip group_dynamics files
-            if [[ "$report" != *"group_dynamics"* ]]; then
-                cp "$report" "$TEMP_DIR/$REPORT_TARGET"
-                echo "  ✓ Copied $(basename $report) -> $REPORT_TARGET"
-                REPORT_FOUND=1
-                break 2
+# First, try to find the correctly named report or common LaTeX output names
+for name in "${SUBMISSION_NAME}.pdf" "main.pdf" "report.pdf" "Report.pdf" "MA424_report.pdf"; do
+    if [ -f "$REPORT_DIR/$name" ]; then
+        cp "$REPORT_DIR/$name" "$TEMP_DIR/$REPORT_TARGET"
+        echo "  ✓ Copied $name -> $REPORT_TARGET"
+        REPORT_FOUND=1
+        break
+    fi
+done
+
+# If not found, find the largest PDF in Report folder (excluding group_dynamics)
+if [ $REPORT_FOUND -eq 0 ]; then
+    echo "  Looking for largest PDF file..."
+    LARGEST_PDF=""
+    LARGEST_SIZE=0
+    
+    for pdf in "$REPORT_DIR"/*.pdf; do
+        if [ -f "$pdf" ]; then
+            base=$(basename "$pdf")
+            # Skip group_dynamics files, figure files, and target file
+            if [[ "$base" != group_dynamics* ]] && [[ "$base" != "$REPORT_TARGET" ]] && [[ "$base" != fig* ]] && [[ "$base" != figure* ]]; then
+                size=$(stat -f%z "$pdf" 2>/dev/null || stat -c%s "$pdf" 2>/dev/null)
+                if [ "$size" -gt "$LARGEST_SIZE" ]; then
+                    LARGEST_SIZE=$size
+                    LARGEST_PDF=$pdf
+                fi
             fi
         fi
     done
-done
+    
+    if [ -n "$LARGEST_PDF" ]; then
+        cp "$LARGEST_PDF" "$TEMP_DIR/$REPORT_TARGET"
+        echo "  ✓ Copied $(basename $LARGEST_PDF) -> $REPORT_TARGET (largest PDF: ${LARGEST_SIZE} bytes)"
+        REPORT_FOUND=1
+    fi
+fi
 
 if [ $REPORT_FOUND -eq 0 ]; then
     echo "  ⚠ WARNING: Report PDF not found!"
+    echo "    Searched in: $REPORT_DIR"
+    echo "    Looking for: main.pdf, report.pdf, or largest PDF"
     echo "    Please manually add your report as: $REPORT_TARGET"
 fi
 
@@ -168,11 +166,10 @@ echo "Step 3: Copying group dynamics files..."
 echo "----------------------------------------"
 
 # Copy group dynamics files
+# They should be in current directory (scripts/)
 GD_LOCATIONS=(
     "."
-    "../Report/deliverables"
-    "./GroupDynamics"
-    "./group_dynamics"
+    "../Report"
 )
 
 for exam_num in $EXAM_1 $EXAM_2 $EXAM_3; do
@@ -244,7 +241,7 @@ else
 fi
 
 # Check R scripts
-for script in "Q1i.R" "Q1ii.R" "Q1iii.R" "Q1iv.R" "Q3i.R" "Q3ii.R" "Q4i.R" "Q4ii.R"; do
+for script in "${SCRIPTS[@]}"; do
     if unzip -l "$ZIP_NAME" | grep -q "$script"; then
         echo "  ✓ R Script: $script"
     else
