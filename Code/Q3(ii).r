@@ -63,8 +63,8 @@ sim_mech1_service <- function(n) {
       ratio <- (1 + Y) * exp(-0.5 * Y)
       K <- ratio / c_val
       
-      # Step 4: Accept Y if U2 <= K, otherwise reject and repeat
-      if (U2 <= K) {
+      # Step 4: Accept Y if U2 < K, otherwise reject and repeat
+      if (U2 < K) {
         X_values[k] <- Y  # Accept Y as our random variable X
         flag <- 0         # Exit the while loop
       }
